@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emotion Detection</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #3498db;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 960px;
+            aspect-ratio: 16/9;
+            margin: 0 auto 1rem auto;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        #videoElement {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .primary-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .secondary-btn {
+            background: #e74c3c;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .upload-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        input[type="file"] {
+            padding: 0.8rem;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        #results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .result-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .result-card img {
+            width: 100%;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .result-card h3 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .emotion-tag {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            background: #3498db;
+            color: white;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading::after {
+            content: "Processing...";
+            color: #3498db;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .record-btn {
+            background-color: #2ecc71;
+        }
+        
+        .record-btn.recording {
+            background-color: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        .record-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Emotion Detection</h1>
+            <p class="subtitle">Analyze facial expressions in real-time or from uploaded videos</p>
+        </div>
+
+        <div class="main-content">
+            <div class="section">
+                <h2 class="section-title">Live Detection</h2>
+                <div class="video-container">
+                    <video id="videoElement" autoplay playsinline></video>
+                    <canvas id="overlayCanvas"></canvas>
+                </div>
+                <div class="controls">
+                    <button class="primary-btn" onclick="startWebcam()">Start Camera</button>
+                    <button class="secondary-btn" onclick="stopWebcam()">Stop Camera</button>
+                    <button class="record-btn" id="recordButton" onclick="toggleRecording()" disabled>Start Recording</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2 class="section-title">Video Upload</h2>
+                <div class="upload-container">
+                    <div class="file-input-wrapper">
+                        <input type="file" id="videoFile" accept="video/*">
+                    </div>
+                    <button class="primary-btn" onclick="uploadVideo()">Process Video</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading" id="loadingIndicator"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let webcamActive = false;
+        let videoElement;
+        let canvas;
+        let ctx;
+        let animationId;
+        let mediaRecorder;
+        let recordedChunks = [];
+        let recordedEmotions = [];
+        let isRecording = false;
+
+        async function startWebcam() {
+            try {
+                videoElement = document.getElementById('videoElement');
+                canvas = document.getElementById('overlayCanvas');
+                ctx = canvas.getContext('2d');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    } 
+                });
+                
+                videoElement.srcObject = stream;
+                videoElement.style.display = 'block';
+                canvas.style.display = 'block';
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        videoElement.play();
+                        resolve();
+                    };
+                });
+                
+                // Set canvas size to match video
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                
+                webcamActive = true;
+                document.getElementById('recordButton').disabled = false;
+                
+                // Start analysis loop
+                analyzeFrame();
+                
+            } catch (err) {
+                console.error("Error accessing webcam:", err);
+                alert("Could not access webcam. Please ensure you have a webcam connected and have granted permission to use it.");
+            }
+        }
+
+        async function analyzeFrame() {
+            if (!webcamActive) return;
+
+            try {
+                // Clear previous drawings
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw video frame to canvas
+                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                
+                // Get frame data
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // Send to server for analysis
+                const response = await fetch('/analyze-frame', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.faces) {
+                    // Draw results on canvas
+                    data.faces.forEach(face => {
+                        const pos = face.position;
+                        
+                        // Draw rectangle
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
+                        
+                        // Draw emotion text with background
+                        const text = `${face.dominant_emotion[0]}: ${face.dominant_emotion[1].toFixed(1)}%`;
+                        ctx.font = '16px Arial';
+                        const textWidth = ctx.measureText(text).width;
+                        
+                        // Draw text background
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                        ctx.fillRect(pos.x, pos.y - 25, textWidth + 10, 20);
+                        
+                        // Draw text
+                        ctx.fillStyle = '#00ff00';
+                        ctx.fillText(text, pos.x + 5, pos.y - 10);
+                    });
+                    
+                    // Store emotions data if recording
+                    if (isRecording) {
+                        recordedEmotions.push({
+                            timestamp: Date.now(),
+                            faces: data.faces
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error analyzing frame:', error);
+            }
+            
+            // Continue analysis loop with a small delay to prevent overwhelming the server
+            animationId = setTimeout(() => {
+                requestAnimationFrame(analyzeFrame);
+            }, 100);
+        }
+
+        function stopWebcam() {
+            if (!webcamActive) return;
+            
+            const stream = videoElement.srcObject;
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            
+            // Clear canvas
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            webcamActive = false;
+            
+            if (animationId) {
+                clearTimeout(animationId);
+            }
+        }
+
+        function uploadVideo() {
+            const fileInput = document.getElementById('videoFile');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a video file first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', file);
+
+            loadingIndicator.style.display = 'block';
+
+            fetch('/process-video', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingIndicator.style.display = 'none';
+                displayResults(data);
+            })
+            .catch(error => {
+                loadingIndicator.style.display = 'none';
+                console.error('Error:', error);
+                alert('Error processing video');
+            });
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            data.frames.forEach((frame, index) => {
+                const frameDiv = document.createElement('div');
+                frameDiv.className = 'result-card';
+                
+                const emotions = frame.faces.map(face => 
+                    `<span class="emotion-tag">${face.dominant_emotion}</span>`
+                ).join(' ');
+
+                frameDiv.innerHTML = `
+                    <h3>Frame ${index + 1}</h3>
+                    <img src="data:image/jpeg;base64,${frame.frame}" alt="Analyzed frame">
+                    <div>Detected ${frame.faces.length} faces</div>
+                    <div>${emotions}</div>
+                `;
+                resultsDiv.appendChild(frameDiv);
+            });
+        }
+
+        async function toggleRecording() {
+            const recordButton = document.getElementById('recordButton');
+            
+            if (!isRecording) {
+                // Start recording
+                recordedChunks = [];
+                recordedEmotions = [];
+                
+                const stream = videoElement.srcObject;
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9'
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                recordButton.textContent = 'Stop Recording';
+                recordButton.classList.add('recording');
+                
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.textContent = 'Start Recording';
+                recordButton.classList.remove('recording');
+                
+                // Wait for the last chunk
+                await new Promise(resolve => {
+                    mediaRecorder.onstop = async () => {
+                        try {
+                            const blob = new Blob(recordedChunks, {
+                                type: 'video/webm'
+                            });
+                            
+                            // Convert blob to base64
+                            const reader = new FileReader();
+                            reader.readAsDataURL(blob);
+                            reader.onloadend = async () => {
+                                const base64data = reader.result;
+                                
+                                // Save recording and emotions data
+                                const response = await fetch('/save-recording', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        videoData: base64data,
+                                        emotionsData: recordedEmotions
+                                    })
+                                });
+                                
+                                const result = await response.json();
+                                if (result.success) {
+                                    alert('Recording saved successfully!');
+                                } else {
+                                    alert('Error saving recording: ' + result.error);
+                                }
+                            };
+                        } catch (error) {
+                            console.error('Error saving recording:', error);
+                            alert('Error saving recording');
+                        }
+                        resolve();
+                    };
+                });
+            }
+        }
+    </script>
+</body>
+</html> 
